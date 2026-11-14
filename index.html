@@ -62,6 +62,7 @@ tr.sel td{background:#1c3040}
 #rightCol{position:sticky;top:8px;min-width:0}
 #rightCol>.panel{margin-bottom:0}
 #worldWrap{margin-top:4px;max-height:110px;overflow-y:auto;border:1px solid #223042;border-radius:4px;background:var(--pan2);padding:4px 8px}
+#routeWrap{max-height:220px;overflow-y:auto;border:1px solid #223042;border-radius:4px;background:var(--pan2)}
 #worldChain{line-height:1.8}
 #impIn,#flagIcao{background:var(--pan2);color:var(--tx);border:1px solid #2a3a4e;border-radius:4px;padding:2px 6px;font:inherit}
 #ctrySug{position:fixed;display:none;background:var(--pan);border:1px solid #2a3a4e;border-radius:4px;padding:3px;z-index:50;max-height:280px;overflow-y:auto;min-width:230px;box-shadow:0 6px 18px #000c}
@@ -70,12 +71,28 @@ tr.sel td{background:#1c3040}
 #ctrySug .ci.have{opacity:.45}
 #ctrySug b{color:var(--acc)}
 @media (max-width:900px){
-  #listWrap{height:200px}
+  /* Layout-Grundsatz mobil: nichts läuft nach rechts aus — die Seite ist exakt bildschirmbreit, alles weitere scrollt nach unten.
+     Klickbare Informationsflächen (Panels) heben sich mit hellerem Grund und deutlichem Rand vom Seiten-Gerüst ab,
+     zwischen ihnen bleibt bewusst Platz als Grifffläche für den Daumen (Seite rauf/runter scrollen). */
+  #listWrap{height:55vh}   /* Ergebnisliste: groß genug, um darin zu arbeiten und separat zu scrollen */
   #cols{display:flex;flex-direction:column;column-gap:0}   /* mobil: Karte zuerst */
   #rightCol{order:-1;position:static}
   .mOnly{display:inline-flex;align-items:center;gap:6px}
   input,select,button{font-size:16px}   /* 16 px verhindert den iOS-Fokus-Zoom */
-  #wrap{padding:0 8px 12px}
+  #wrap{padding:0 14px 24px}
+  .panel{background:#141e29;border-color:#2c405c;border-radius:10px;padding:10px;margin-bottom:14px}
+  #leftCol{gap:14px}
+  #routePanel{order:-1}   /* Route-Modus-Auswahl direkt unter der Karte, Liste darunter */
+  #routeWrap{max-height:40vh}
+  #worldWrap{max-height:150px}
+  #tab th,#tab td{padding:6px 7px}   /* Zeilen hoch genug für den Daumen */
+  #tab td{white-space:normal}   /* Name darf umbrechen — Tabelle bleibt bildschirmbreit, kein horizontales Scrollen */
+  #rmWrap{display:flex;flex-direction:column;align-items:stretch;gap:8px;margin-bottom:8px}
+  .rmBtn{padding:12px 6px;border-radius:8px;text-align:center;font-size:15px}
+  .rmBtn.act{background:#173049;border-color:var(--acc);color:#fff}
+  #detail h3{font-size:12px}
+  #detail h4{margin:6px 0 2px}
+  #detail .rwtab td,#detail .rwtab th{padding:1px 4px;white-space:nowrap}   /* Pistentabelle kompakt, kein Umbruch */
 }
 </style>
 </head>
@@ -130,6 +147,7 @@ tr.sel td{background:#1c3040}
       <label><input type="checkbox" class="fcat" value="2" checked> Asobo</label>
       <label><input type="checkbox" class="fcat" value="3" checked> 3rd-Party</label>
     </span></label>
+  <span id="catHint" class="small" style="color:#ffd23b" title="Kategorien kommen aus dem MakeRwys-Scan — 💾 Export am PC → 📦 Import mobil überträgt die Klassifizierung"></span>
   <label>Flugzeug <select id="acSel"></select></label>
   <span id="acInfo" class="small"></span>
   <button id="acEdit" class="small">✎ Aircraft</button>
@@ -163,8 +181,8 @@ tr.sel td{background:#1c3040}
     <div style="margin-top:4px">Karte: schwarze Linien = Ländergrenzen — bildschirm-konstant fein (~1,1 px) in jeder Zoomstufe, dickt beim Reinzoomen nicht auf und wird beim Rauszoomen keine Haarlinie; durchgehend hochauflösend aus Natural Earth 10 m mit voller Koordinatenpräzision, Deutschlands Grenzen sind komplett. Blaue Flächen = Seen zur Orientierung (Natural Earth + kuratiert: Gardasee, Bodensee, Genfer See, Como, Zürichsee, Starnberger See, Ammersee, Kochelsee, Walchensee, Chiemsee, Tegernsee) mit dezenten Umrissen, die beim Reinzoomen fein bleiben.</div>
     <div style="margin-top:4px">Wetter-Layer (nur online, rein manueller Import — kein Auto-Update): ☂ lädt das Regenbild (NASA GPM IMERG, Surface Precipitation Rate) und zeigt, wo Regen fällt — grün = leicht, gelb = kräftig, rot = Starkregen; regenfreie Gebiete bleiben transparent, hat der aktuelle Tag noch keine Daten, wird automatisch bis zu 5 Tage zurückgegriffen. Erneuter Klick entfernt es, wiederholter Klick lädt neu. ➤ lädt Wind/Jetstream auf Flughöhe (250 hPa ≈ FL340, Open-Meteo GFS, 396-Punkte-Gitter) als farbcodierte Pfeile — Farbcodierung in der Legende unter der Karte, gelb/rot = Jetkern; ab Zoom 18× verdoppelt sich die Pfeildichte je Richtung (2×2 je Gitterzelle, aus denselben Messdaten interpoliert) — vier Pfeile, wo vorher einer war, und zwar konstant, unabhängig davon, wie weit du reinzoomst. Beide Layer zeigen, ob eine Route wettermäßig interessant wird oder herausfällt.</div>
     <div style="margin-top:4px">Route-Filter (nur im Paar- und Ab-Start-Modus, wirken ausschließlich auf Routenliste und Routenlinien — Karte-Punkte und Airport-Ergebnisliste bleiben unverändert): HQ-Route — eine Verbindung braucht mindestens einen hochwertigen Flughafen (blau = Asobo, grün = 3rd-Party); im Ab-Start-Modus muss das Ziel hochwertig sein, von blauem Start (Asobo) gehen nur grüne Ziele (3rd-Party) — so landest du nie auf reinem AI-Gelände. Mind. 1× (ILS, Verf., TWR, ATIS, PAPI — kombinierbar): mindestens ein Flughafen der Verbindung muss alle aktivierten Features haben, und zwar derselbe Flughafen — ILS/PAPI & Co. zählen für die Landung am Ziel, Features am anderen Ende helfen dir nicht. So kannst du im Airport-Filter auch verfahrenslose Häfen drinlassen und trotzdem gezielt ILS-Anflüge finden. Beide Filter speichern mit und sind Teil des Daten-Exports; die gefilterte Anzahl steht in der blauen Routen-Infozeile.</div>
-    <div style="margin-top:4px">Details: Zeile 1 fasst alles zusammen — ICAO/IATA, Name, Land mit Flagge (Leerzeichen dahinter), Pistenlänge (ft, fett) mit Surface als Wort dahinter (weiß = paved, gelb = unbefestigt), Magnetische Variation ausgeschrieben, Linienverkehr als Wort; rechts außen die farbcodierte Kategorie (● AI Generated rot, ● Asobo blau, ● 3rd-Party grün) mit Package-Symbol (▣ = Werksscan, ⇩ = importiert). Zeile 2 = farbige Flags (grün = vorhanden, rot = fehlt): ILS, RNAV, ATIS, TWR, PAPI, dazu ▲-Bergigkeit. Frequenzen (ATIS/GND/AWOS/Tower …) stehen als eigene Funk-Zeile und werden nie mehr als Piste mit NaN angezeigt. Das Karten-Mouseover zeigt ATIS jetzt wie ILS/RNAV/Tower in Grün/Rot. Die Mtn-Spalte der Airport-Liste und die ▲A/▲B-Spalten der Routenliste sind konsistent zur Karte gefärbt: 0/1 = weiß, 2 = gelb, 3 = rot.</div>
-    <div style="margin-top:4px">Mobil (iPhone/iPad): ☰ Filter und ☰ Routen klappen die Eingaben weg — einmal setzen, dann zuklappen. Die Karte ist die Primärsteuerung: 1 Finger schiebt, 2 Finger Pinch-Zoom (um den Finger-Mittelpunkt), Tippen wählt den nächsten Airport (Tap-Radius finger-gerecht), die Details erscheinen unter der Karte. Kein Hover — alle Infos stehen im Detail-Panel. Beim ersten Laden einmal komplett laden lassen, danach läuft die Seite offline aus dem Safari-Cache (nur die Wetter-Layer brauchen Netz).</div>
+    <div style="margin-top:4px">Details: Zeile 1 fasst alles zusammen — ICAO/IATA, Name, Land mit Flagge (Leerzeichen dahinter), Pistenlänge (ft, fett) mit Surface als Wort dahinter (weiß = paved, gelb = unbefestigt), Linienverkehr als Wort; rechts außen die farbcodierte Kategorie (● AI Generated rot, ● Asobo blau, ● 3rd-Party grün) mit Package-Symbol (▣ = Werksscan, ⇩ = importiert). Zeile 2 = farbige Flags (grün = vorhanden, rot = fehlt): ILS, RNAV, ATIS, TWR, PAPI, dazu ▲-Bergigkeit. Die Pistentabelle zeigt mobil nur die Kernspalten (Piste, ft, Hdg, ILS, PAPI), am PC alle. Das Karten-Mouseover zeigt ATIS jetzt wie ILS/RNAV/Tower in Grün/Rot. Die Mtn-Spalte der Airport-Liste und die ▲A/▲B-Spalten der Routenliste sind konsistent zur Karte gefärbt: 0/1 = weiß, 2 = gelb, 3 = rot.</div>
+    <div style="margin-top:4px">Mobil (iPhone/iPad): ☰ Filter klappt die Airport-Eingaben zu — einmal setzen, dann zuklappen. Direkt unter der Karte steht die Route-Modus-Auswahl (✈ Aus · ➤ Ab Start · ⇄ Paare · 🌐 Welt) — erst den Modus antippen, darunter erscheinen nur die Felder dieses Modus, alles was die anderen Modi brauchen, ist komplett ausgeblendet. Die Karte ist die Primärsteuerung: 1 Finger schiebt, 2 Finger Pinch-Zoom (um den Finger-Mittelpunkt), Tippen wählt den nächsten Airport (Tap-Radius finger-gerecht), die Details erscheinen unter der Karte. Darunter folgen Route-Status/Routenliste, ganz unten der große Ergebnis-Bereich mit der Airport-Liste — Kernspalten (ICAO, Name, RWY, Bergigkeit, ILS, RNAV), Name bricht um, nichts läuft nach rechts aus dem Bildschirm; die restlichen Spalten stehen im Detail-Panel. Die Seite scrollt nur nach unten: Die Panels (Karte, Route, Liste) heben sich farblich vom Seitenrand ab, die Streifen dazwischen sind bewusst breite Griffflächen für den Daumen. Kein Hover — alle Infos stehen im Detail-Panel. Beim ersten Laden einmal komplett laden lassen, danach läuft die Seite offline aus dem Safari-Cache (nur die Wetter-Layer brauchen Netz).</div>
     <div style="margin-top:4px">Karte: Mausrad = Zoom, Ziehen = Verschieben (horizontal unbegrenzt — der Globus wiederholt sich am Längen-180°-Rand), Doppelklick = rein. Klick auf Zeile = Auswahl + Karte zoomt, Klick auf Punkt = Auswahl + Liste springt, Routenzeile = Route gelb fokussiert, Airports der aktiven Route tragen einen weißen Ring. Ab Zoom 23× ICAO-Label, ab 30× Pistenrichtungs-Symbole und Berg-Markierung (Berg gelb, Hochgebirge rot — Hügel nur in den Daten, nicht als Symbol). Schalter oben links in der Karte blendet alle Häfen außerhalb der aktiven Route aus (nur Anzeige, Listen unverändert). Procedures nicht im BGL-Scan: ILS/TWR/ATIS/Gates hart, RNAV heuristisch (Flag einmalig im Datenbestand, Spalte direkt neben ILS). Procedures-Filter: ILS o. RNAV = mindestens ein Verfahren vorhanden (verfahrenslose Häfen nur unter „none“ sichtbar, „alle“ = kein Filter). Routenliste: Spaltenkopf-Klick sortiert auf-/absteigend; Balken vor dem Ziel-ICAO = Asobo (blau) bzw. 3rd-Party (grün) als Ziel, ✓ violett = Verbindung bereits geflogen — beide Marker sitzen in einer eigenen schmalen Spalte, die Ziel-ICAO bleibt in der Spaltenlinie. 💾 neben Dauer/± speichert die Vorgaben pro Route-Modus (Route und Weltumrundung getrennt) und ist Teil des Daten-Exports. Flughistorie: ✈ Historie-Button — CSV/TXT deines MSFS-Logbuchs einlesen (FlightLog Analyzer CSV wird spaltengenau über die Origination/Destination-Kopfzeile gelesen — SID/STAR-, Pisten- und Livery-Texte stören nicht; einfache Listen „EDDM,KJFK" je Zeile laufen über ICAO-Token); geflogene Häfen + Verbindungen violett auf der Karte, geflogene Etappe der aktiven Route dicke violette Unterlage, unbekannte ICAOs werden übersprungen und gezählt. Neuer Export = erneut einlesen (ersetzt). Weight-Limits existieren in MSFS-Daten nicht. Bergig-Levels aus dem Höhenraster (max. Geländehöhe im Umkreis).</div>
   </div>
   <h4 style="margin:8px 0 3px;font-size:11px;color:var(--dim);text-transform:uppercase">Daten sichern / übertragen</h4>
@@ -188,11 +206,20 @@ tr.sel td{background:#1c3040}
 <div id="cols">
 <div id="leftCol">
 <div class="panel">
+<div id="listLbl" class="mOnly" style="margin:0 0 8px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;font-size:11px">Ergebnisse</div>
 <div id="listWrap"><table id="tab"><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
 </div>
 
 <div class="panel" id="routePanel">
-  <div class="frow mOnly" style="gap:8px"><button id="rToggle" class="small" title="Routen-Steuerung zeigen/verbergen — mobil">☰ Routen</button><span id="routeInfoM" class="small" style="color:var(--acc)"></span></div>
+  <div id="rmWrap" class="mOnly">
+    <div class="rmBtns" style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button id="rmOff" class="rmBtn" data-m="off" title="Keine Route — nur Filter, Karte und Airport-Liste">✈ Aus</button>
+      <button id="rmFrom" class="rmBtn" data-m="from" title="Route ab einem Start-Flughafen (Ziele im Dauer-Band)">➤ Ab Start</button>
+      <button id="rmPairs" class="rmBtn" data-m="pairs" title="Alle Routenpaare aus der gefilterten Airport-Menge">⇄ Paare</button>
+      <button id="rmWorld" class="rmBtn" data-m="world" title="Weltumrundung in Etappen">🌐 Welt</button>
+    </div>
+    <span id="routeInfoM" class="small" style="color:var(--acc)"></span>
+  </div>
   <div id="rctl">
   <div class="frow">
     <h1 style="margin:0 16px 0 0">Routen</h1>
@@ -237,7 +264,7 @@ tr.sel td{background:#1c3040}
     </div>
     <div class="small" style="margin-top:3px">Profil wird dauerhaft gespeichert und bei jeder SimBrief-Übergabe mitgesendet. Flugnummer fortlaufend: Zähler +1 pro Übergabe (als Routen-Zähler nutzbar); „Nächste FlNr“ setzt den Zähler direkt neu — damit lassen sich Wiederholungen bereinigen. Reiseflughöhe: Auswahl oder manuell, leer = SimBrief wählt automatisch. Passagiere: auto = SimBrief-Standardbesetzung, none = 0 Pax, Zahl = fest. Cost Index leer = SimBrief-Standard; für Charter-Betrieb realistisch: 150–250 (Standard 200 für die B736), Maximalwerte nur Medevac/Positioning.</div>
   </div>
-  <div id="routeWrap" style="display:none;max-height:220px;overflow-y:auto;border:1px solid #223042;border-radius:4px;background:var(--pan2)">
+  <div id="routeWrap" style="display:none">
     <table id="routeTab" class="small"><thead id="rThead"></thead><tbody id="rTbody"></tbody></table>
   </div>
   <div id="pairInfo" class="small" style="margin-top:4px"></div>
@@ -400,6 +427,9 @@ function inBand(d,b){const dlo=distForTime(b.tlo), dhi=Math.max(dlo,distForTime(
 const COLS_AP=[['ICAO',IDX.icao,'s'],['Name',IDX.name,'s'],['Land',IDX.ctry,'s'],['RWY ft',IDX.rwy,'n'],
  ['Mtn',IDX.mtn,'m'],['TWR',IDX.twr,'b'],['ILS',IDX.ils,'b'],['RNAV',IDX.appr,'b'],['ATIS',IDX.atis,'b'],
  ['PAPI',IDX.papi,'b'],['CL',IDX.cl,'b'],['Gates',IDX.gates,'n'],['Elev ft',IDX.elev,'n'],['Surf','surfN','s'],['IATA',IDX.iata,'s']];
+const COLS_AP_M=[['ICAO',IDX.icao,'s'],['Name',IDX.name,'s'],['RWY ft',IDX.rwy,'n'],['Mtn',IDX.mtn,'m'],['ILS',IDX.ils,'b'],['RNAV',IDX.appr,'b']];   // mobil: Kernspalten — Tabelle bleibt bildschirmbreit
+let apWasMob=null;
+function apCols(){const mob=!!(mQ&&mQ.matches);if(mob!==apWasMob){sortCol=null;apWasMob=mob;}return mob?COLS_AP_M:COLS_AP;}   // Spaltenwechsel (Drehen/Resize) → Sortierung zurücksetzen
 function acLanding(){const a=AC[acSel];return a?a[1]:0;}   // ft
 function val(i,c){const r=AP[i];
   switch(c[1]){case 'cat':return catOf(i);case 'surfN':return (SURFN[r[IDX.surf]]||'?').slice(0,4);case 'dist':return r._d||0;case 'time':return r._t||0;default:return r[c[1]];}}
@@ -426,7 +456,7 @@ function cellH(v,c,warn){const t=c[2];
   if(t==='n')return `<td${w}>${fmtV(c,v)}</td>`;
   return `<td${w}>${esc(v==null?'':v)}</td>`;}
 function render(){
-  const cols=COLS_AP;
+  const cols=apCols();
   let src=lastFiltered.slice();
   if(sortCol!=null&&cols[sortCol]&&src.length>1){
     const c=cols[sortCol];
@@ -463,12 +493,17 @@ window.sbPair=null;
 function scheduleRoute(){clearTimeout(rtTimer);rtTimer=setTimeout(routeUpdate,250);}
 let routeSort=null,routeSortDir=1;
 const RT_COLS=[['',''],['Von','i'],['',''],['Nach','j'],['nm','d'],['Zeit','t'],['RWY A','irwy'],['RWY B','jrwy'],['▲A','imtn'],['▲B','jmtn'],['ILS A','iils'],['ILS B','jils'],['RNAV A','iappr'],['RNAV B','jappr']];
+const RT_COLS_M=[['',''],['Von','i'],['',''],['Nach','j'],['nm','d'],['Zeit','t']];   // mobil: Kernspalten — Details stehen im Detail-Panel
+let rtWasMob=null;
+function rtCols(){const mob=!!(mQ&&mQ.matches);if(mob!==rtWasMob){routeSort=null;rtWasMob=mob;}return mob?RT_COLS_M:RT_COLS;}
 window.routeSortClick=(k)=>{if(routeSort===k)routeSortDir*=-1;else{routeSort=k;routeSortDir=1;}renderRoutes();};
 function renderRoutes(){
   const wrap=$('routeWrap');
   if(!routePairs||!routePairs.length){wrap.style.display='none';return;}
+  const cols=rtCols();
+  const full=cols===RT_COLS;
   const list=routePairs.slice();
-  if(routeSort!=null){const key=RT_COLS[routeSort][1];
+  if(routeSort!=null){const key=cols[routeSort][1];
     const gv=p=>{const a=AP[p.i],b=AP[p.j];switch(key){
       case 'i':return a[IDX.icao];case 'j':return b[IDX.icao];case 'd':return p.d;case 't':return timeForDist(p.d);
       case 'irwy':return a[IDX.rwy];case 'jrwy':return b[IDX.rwy];case 'imtn':return a[IDX.mtn]||0;case 'jmtn':return b[IDX.mtn]||0;
@@ -477,7 +512,7 @@ function renderRoutes(){
     list.sort((x,y)=>{const va=gv(x),vb=gv(y);
       if(typeof va==='string')return String(va).localeCompare(String(vb))*routeSortDir;
       return ((va||0)-(vb||0))*routeSortDir;});}
-  $('rThead').innerHTML='<tr>'+RT_COLS.map((c,k)=>c[1]===''?'<th style="width:12px"></th>':`<th data-k="${k}" style="cursor:pointer" title="Nach ${c[0]} sortieren">${c[0]}${routeSort===k?(routeSortDir>0?' ▲':' ▼'):''}</th>`).join('')+'</tr>';
+  $('rThead').innerHTML='<tr>'+cols.map((c,k)=>c[1]===''?'<th style="width:12px"></th>':`<th data-k="${k}" style="cursor:pointer" title="Nach ${c[0]} sortieren">${c[0]}${routeSort===k?(routeSortDir>0?' ▲':' ▼'):''}</th>`).join('')+'</tr>';
   [...$('rThead').querySelectorAll('th')].forEach(th=>th.onclick=()=>window.routeSortClick(+th.dataset.k));
   let h='';
   list.forEach(p=>{const a=AP[p.i],b2=AP[p.j];
@@ -487,11 +522,11 @@ function renderRoutes(){
     const barJ=catOf(p.j)===2||catOf(p.j)===3?`<span style="display:inline-block;width:4px;height:11px;background:${catOf(p.j)===3?'#3ddc84':'#4aa3ff'};border-radius:1px"></span>`:'';
     h+=`<tr${active?' class="sel"':''} style="cursor:pointer${flown?';background:#c77dff26':''}" onclick="selectAirport(${p.j},{noMapFocus:true,noOriginFill:true});focusPair(${p.i},${p.j})">
       <td style="width:12px;padding-left:2px">${barI}</td><td>${a[IDX.icao]}</td><td style="width:12px;padding-left:2px">${barJ}${flown?'<span style="color:#c77dff">✓</span>':''}</td><td><b style="color:#4aa3ff">${b2[IDX.icao]}</b></td>
-      <td>${Math.round(p.d*kmNM)}</td><td>${fmtT(timeForDist(p.d))}</td>
-      <td>${Math.round(a[IDX.rwy]*mFT)}</td><td>${Math.round(b2[IDX.rwy]*mFT)}</td>
+      <td>${Math.round(p.d*kmNM)}</td><td>${fmtT(timeForDist(p.d))}</td>`
+      +(full?`<td>${Math.round(a[IDX.rwy]*mFT)}</td><td>${Math.round(b2[IDX.rwy]*mFT)}</td>
       <td>${mtnSp(a[IDX.mtn]||0)}</td><td>${mtnSp(b2[IDX.mtn]||0)}</td>
       <td>${a[IDX.ils]?'✓':'·'}</td><td>${b2[IDX.ils]?'✓':'·'}</td>
-      <td>${a[IDX.appr]?'✓':'·'}</td><td>${b2[IDX.appr]?'✓':'·'}</td></tr>`;});
+      <td>${a[IDX.appr]?'✓':'·'}</td><td>${b2[IDX.appr]?'✓':'·'}</td>`:'')+`</tr>`;});
   $('rTbody').innerHTML=h;wrap.style.display='block';
   layoutHeight();
 }
@@ -634,6 +669,7 @@ window.exportWorld=exportWorld;
 function layoutHeight(){
   const fp=$('filterPanel');
   if(!window.innerHeight||!fp||fp.offsetHeight==null)return;
+  if(mQ&&mQ.matches){$('listWrap').style.height=Math.round(window.innerHeight*0.55)+'px';return;}   // mobil: großer Ergebnis-Bereich (~55 % des Bildschirms), der Rest der Seite scrollt nach unten
   const avail=window.innerHeight-fp.offsetHeight-28;
   $('listWrap').style.height=Math.max(220,Math.round(avail*0.6)-50)+'px';   // 2 Zeilen (~50 px) kürzer: Routen-Tabelle + Summary-Zeile passen ohne Scrollen
   $('rightCol').style.top=(fp.offsetHeight+12)+'px';}
@@ -666,6 +702,8 @@ function setRi(t){$('routeInfo').textContent=t;const m=$('routeInfoM');if(m)m.te
 function routeUpdate(){
   window.selPair=null;$('pairInfo').innerHTML='';
   routeMode=$('routeMode').value;
+  ['off','from','pairs','world'].forEach(m=>{const b=$('rm'+m[0].toUpperCase()+m.slice(1));if(b&&b.classList)b.classList.toggle('act',m===routeMode);});   // Mobil: Modus-Buttons mitschalten
+  if(mQ&&mQ.matches)mRctl();   // mobil: Eingabereihe nur im aktiven Modus zeigen
   $('rtFilterWrap').style.display=(routeMode==='pairs'||routeMode==='from')?'inline-flex':'none';
   const rf=rfState();const rfT=rfTags();
   const rfInfo=rfT.length?` · ${rfT.join(' · ')}`:'';
@@ -1035,8 +1073,11 @@ $('mzOut').onclick=()=>{zoom=Math.max(1,zoom/1.5);clampCam();drawMap();};
 $('mzReset').onclick=()=>{zoom=1;camX=WBASE/2;camY=HBASE/2;drawMap();};
 // ---- Mobil-Klappen: Filter/Routen-Steuerung einmal setzen, dann wegklappen — Karte ist die Primärsteuerung ----
 const mQ=(typeof window.matchMedia==='function')?window.matchMedia('(max-width:900px)'):null;
+function mRctl(){const m=$('routeMode')?($('routeMode').value||'off'):'off';   // mobil: nur die Felder des aktiven Modus — im aus-Modus nur die vier Buttons
+  $('rctl').style.display=m==='off'?'none':'';}
 function mApply(){if(!mQ||!mQ.matches)return;
-  $('frows').style.display='none';$('rctl').style.display='none';}
+  $('frows').style.display='none';
+  mRctl();}
 if(mQ){mApply();if(mQ.addEventListener)mQ.addEventListener('change',()=>{if(mQ.matches)mApply();});}
 // ---- Mobil: Karte höher als breit (wie erster Entwurf) — die Welt bleibt 1280×640, nur der Canvas-Viewport wird höher, nichts verzerrt ----
 function sizeMap(){
@@ -1056,7 +1097,9 @@ sizeMap();   // Init-am-Script-Ende (update→drawMap) zeichnet mit den neuen Ma
 if(typeof window.addEventListener==='function'){let szT=null;   // Drehen/Resize: nach 150 ms neu vermessen
   window.addEventListener('resize',()=>{if(szT)clearTimeout(szT);szT=setTimeout(()=>{sizeMap();drawMap();},150);});}
 $('fToggle').onclick=()=>{const f=$('frows');f.style.display=f.style.display==='none'?'':'none';};
-$('rToggle').onclick=()=>{const r=$('rctl');r.style.display=r.style.display==='none'?'':'none';};
+[['off','rmOff'],['from','rmFrom'],['pairs','rmPairs'],['world','rmWorld']].forEach(p=>{   // Mobil: Modus-Auswahl direkt unter der Karte — je nach Wahl erscheinen nur dessen Felder
+  const b=$(p[1]);if(b)b.onclick=()=>{$('routeMode').value=p[0];routeUpdate();};});
+(()=>{const b=$('rmOff');if(b&&b.classList)b.classList.toggle('act',true);})();   // Startzustand: „aus" ist der aktive Modus
 // ---- Touch (iPhone/iPad): 1 Finger schiebt die Karte, 2 Finger Pinch-Zoom, Tippen wählt den Airport (Details erscheinen unter der Karte) ----
 let tPan=null,tPin=null,tTap=null;
 function cvPt(t){const rc=cv.getBoundingClientRect();return[(t.clientX-rc.left)*W/Math.max(1,rc.width||W),(t.clientY-rc.top)*H/Math.max(1,rc.height||H)];}
