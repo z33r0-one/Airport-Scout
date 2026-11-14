@@ -299,7 +299,6 @@ tr.sel td{background:#1c3040}
 <script>if('serviceWorker' in navigator){addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});}</script>
 <script>
 
-
 'use strict';
 // ---- Indizes ----
 const IDX = {icao:0,name:1,ctry:2,lat:3,lon:4,elev:5,cat:6,rwy:7,surf:8,ils:9,papi:10,appr:11,cl:12,twr:13,atis:14,app:15,gnd:16,gates:17,ga:18,park:19,sched:20,mtn:21,magvar:22,iata:23};
@@ -386,6 +385,13 @@ function applyFilters(){
     const cw=routeMode==='world'?(cw0===4?2:cw0):(cw0===4?0:cw0);   // AI Prio: Weltumrundung = wie Asobo, sonst = AI
     if(!cats.has(cw))continue;
     out.push(i);}
+  const ch=$('catHint');
+  if(ch){let pk=null;try{pk=JSON.parse(localStorage.getItem('asc_pkg')||'null');}catch(e){}
+    const t=[];
+    if(!pk||!Object.keys(pk).length)t.push('ohne 📦 Packages-Import zählen Navigraph-überdeckte Häfen als AI Generated');
+    if(cats.has(2))t.push('Asobo-Werksplätze im Scan selten');
+    if(cats.has(3))t.push('3rd-Party nur aus importierten Packages');
+    ch.textContent=t.join(' · ');}
   return out;
 }
 function inBand(d,b){const dlo=distForTime(b.tlo), dhi=Math.max(dlo,distForTime(b.thi));return d>=Math.min(dlo,dhi)&&d<=Math.max(dlo,dhi);}
@@ -492,7 +498,7 @@ function renderRoutes(){
 function focusPair(i,j){window.selPair=[i,j];window.sbPair=[i,j];
   const a=AP[i],b=AP[j];const[x1,y1]=px(a[IDX.lon],a[IDX.lat]),[x2,y2]=px(b[IDX.lon],b[IDX.lat]);
   const dx=Math.max(1e-6,Math.abs(x1-x2)),dy=Math.max(1e-6,Math.abs(y1-y2));
-  zoom=Math.max(3,Math.min(400,Math.floor(0.7*Math.min(W/dx,H/dy))));
+  zoom=Math.max(3,Math.min(400,Math.floor(0.7*Math.min(WBASE/dx,HBASE/dy))));
   camX=(x1+x2)/2;camY=(y1+y2)/2;clampCam();
   const dk=distKm(a,b);
   const key=r=>`${Math.round(r[IDX.rwy]*mFT)} ft RWY · ILS ${r[IDX.ils]?'✓':'—'} · RNAV ${r[IDX.appr]?'✓':'—'} · TWR ${r[IDX.twr]?'✓':'—'} · PAPI ${r[IDX.papi]?'✓':'—'} · ${r[IDX.elev]} ft${r[IDX.mtn]?' · ▲'+r[IDX.mtn]:''}`;
@@ -746,12 +752,13 @@ function simbriefGo(){
 
 // ---- Karte (Zoom/Pan + Höhenraster) ----
 const cv=$('map'),ctx=cv.getContext('2d');
-const W=1280,H=640;
-let camX=W/2,camY=H/2,zoom=1,dragS=null,dragMoved=false;
-function px(lon,lat){return [(lon+180)/360*W,(90-lat)/180*H];}
-function wrapDx(d){d=((d%W)+W)%W;if(d>W/2)d-=W;return d;}   // kürzester Weg um den Globus (Längengrad-Seam)
+const WBASE=1280,HBASE=640;   // Weltprojektion (equirect 2:1) — fix, unabhängig von der Canvas-Viewport-Größe
+let W=1280,H=640,MAPSC=1;     // Viewport (Canvas) — mobil dynamisch (Karte höher als breit), Desktop/Test 1280×640
+let camX=WBASE/2,camY=HBASE/2,zoom=1,dragS=null,dragMoved=false;
+function px(lon,lat){return [(lon+180)/360*WBASE,(90-lat)/180*HBASE];}
+function wrapDx(d){d=((d%WBASE)+WBASE)%WBASE;if(d>WBASE/2)d-=WBASE;return d;}   // kürzester Weg um den Globus (Längengrad-Seam)
 function clampCam(){const hh=H/2/zoom;
-  camY=Math.max(hh,Math.min(H-hh,camY));camX=((camX%W)+W)%W;}
+  camY=Math.max(hh,Math.min(HBASE-hh,camY));camX=((camX%WBASE)+WBASE)%WBASE;}
 let demCanvas=null,demBuilt=false,demEur=null;
 function demCol(m){
   if(m<0){const t=Math.min(1,-m/6000);return [(8+6*t)|0,(15+11*t)|0,(26+14*t)|0];}
@@ -808,11 +815,11 @@ function buildDemEur(){
 }
 function buildDems(){buildDem();buildDemEur();drawMap();}
 let landCv=null;
-function buildLand(){landCv=document.createElement('canvas');landCv.width=W;landCv.height=H;const c=landCv.getContext('2d');
- c.fillStyle='#0a0f16';c.fillRect(0,0,W,H);
+function buildLand(){landCv=document.createElement('canvas');landCv.width=WBASE;landCv.height=HBASE;const c=landCv.getContext('2d');
+ c.fillStyle='#0a0f16';c.fillRect(0,0,WBASE,HBASE);
  c.strokeStyle='#1c2a3a';c.lineWidth=0.5;
- for(let lon=-150;lon<=150;lon+=30){const[x1]=px(lon,0);c.beginPath();c.moveTo(x1,0);c.lineTo(x1,H);c.stroke();}
- for(let lat=-60;lat<=90;lat+=30){const[,y1]=px(0,lat);c.beginPath();c.moveTo(0,y1);c.lineTo(W,y1);c.stroke();}
+ for(let lon=-150;lon<=150;lon+=30){const[x1]=px(lon,0);c.beginPath();c.moveTo(x1,0);c.lineTo(x1,HBASE);c.stroke();}
+ for(let lat=-60;lat<=90;lat+=30){const[,y1]=px(0,lat);c.beginPath();c.moveTo(0,y1);c.lineTo(WBASE,y1);c.stroke();}
  c.fillStyle='#16222e';c.strokeStyle='#26394a';c.lineWidth=0.7;
  LAND.forEach(ring=>{c.beginPath();ring.forEach((p,k)=>{const[x,y]=px(p[0],p[1]);k?c.lineTo(x,y):c.moveTo(x,y);});c.closePath();c.fill();c.stroke();});
 }
@@ -831,20 +838,20 @@ function tipHtml(i){const r=AP[i];const catT=catOf(i);const CATCOL={0:'#ff3b3b',
       <div class="tl">Elevation: ${r[IDX.elev]} ft</div>
       <div class="tl">Heading: ${hdgs}</div>`;}
 function drawMap(){
-  ctx.setTransform(1,0,0,1,0,0);
+  ctx.setTransform(MAPSC,0,0,MAPSC,0,0);
   ctx.fillStyle='#071019';ctx.fillRect(0,0,W,H);
   ctx.save();
   ctx.translate(W/2-camX*zoom,H/2-camY*zoom);ctx.scale(zoom,zoom);
   const vx0=camX-W/2/zoom,vx1=camX+W/2/zoom,vy0=camY-H/2/zoom,vy1=camY+H/2/zoom;
-  const offs=[];for(let k=Math.floor(vx0/W);k<=Math.ceil(vx1/W);k++)offs.push(k*W);   // Globus-Kopien (Endlos-Scroll)
+  const offs=[];for(let k=Math.floor(vx0/WBASE);k<=Math.ceil(vx1/WBASE);k++)offs.push(k*WBASE);   // Globus-Kopien (Endlos-Scroll)
   const strokeLegs=(list,col,width)=>{ctx.strokeStyle=col;ctx.lineWidth=width/zoom;ctx.beginPath();
     for(const l of list){const a=AP[l[0]],b=AP[l[1]];const[x1,y1]=px(a[IDX.lon],a[IDX.lat]),[x2,y2]=px(b[IDX.lon],b[IDX.lat]);
       const d=wrapDx(x2-x1);
       for(const o of offs){ctx.moveTo(x1+o,y1);ctx.lineTo(x1+o+d,y2);}}
     ctx.stroke();};
-  if(demCanvas){for(const o of offs)ctx.drawImage(demCanvas,o,0,W,H);}
+  if(demCanvas){for(const o of offs)ctx.drawImage(demCanvas,o,0,WBASE,HBASE);}
   else{if(!landCv)buildLand();for(const o of offs)ctx.drawImage(landCv,o,0);}
-  if(demEur){const wPx=DEME_W*DEME_LONS*W/360,hPx=DEME_H*DEME_LATS*H/180;
+  if(demEur){const wPx=DEME_W*DEME_LONS*WBASE/360,hPx=DEME_H*DEME_LATS*HBASE/180;
     const[ex,ey]=px(DEME_LON0,DEME_LAT0+DEME_H*DEME_LATS);
     for(const o of offs)ctx.drawImage(demEur,ex+o,ey,wPx,hPx);}
   // Ländergrenzen (schwarz, bildschirm-konstant ~1,1 px in jeder Zoomstufe — lineWidth gilt in Basis-Px, /zoom hält es auf dem Bildschirm fein; durchgehend Natural Earth 10m mit voller Koordinatenpräzision) + Orientierungsseen
@@ -865,7 +872,7 @@ function drawMap(){
       for(let k=0;k<p.length;k+=2){const[x,y]=px(p[k],p[k+1]);if(k===0)ctx.moveTo(x+o,y);else ctx.lineTo(x+o,y);}
       ctx.closePath();ctx.fill();ctx.stroke();}}
   // Regen-Layer (manueller Online-Import NASA GPM IMERG — nur Regen-Pixel, Transparenz steckt im Bild)
-  if(precipImg){for(const o of offs)ctx.drawImage(precipImg,o,0,W,H);}
+  if(precipImg){for(const o of offs)ctx.drawImage(precipImg,o,0,WBASE,HBASE);}
   // Wind/Jetstream auf Flughöhe (manueller Online-Import) — ab Zoom 18 zusätzliche interpolierte Zwischenpfeile
   if(windGrid){ctx.lineWidth=1.5/zoom;
     const drawWindArrow=(lo,la,kt,rad,scale)=>{
@@ -883,8 +890,8 @@ function drawMap(){
     if(zoom>=18&&windIdx){
       // feste 2×2-Verfeinerung: 7,5° × 5° statt 15° × 10° — 4 Pfeile wo vorher 1 war, konstante Dichte unabhängig von der Zoomstufe
       const stepLa=7.5,stepLo=5;
-      const latTop=90-vy0*180/H,latBot=90-vy1*180/H;
-      const lonA=Math.max(-180,vx0*360/W-180),lonB=Math.min(180,vx1*360/W-180);
+      const latTop=90-vy0*180/HBASE,latBot=90-vy1*180/HBASE;
+      const lonA=Math.max(-180,vx0*360/WBASE-180),lonB=Math.min(180,vx1*360/WBASE-180);
       const la0=Math.ceil(Math.max(-85,latBot)/stepLa)*stepLa,la1=Math.min(85,latTop);
       const lo0=Math.ceil(Math.max(-180,lonA)/stepLo)*stepLo,lo1=Math.min(180,lonB);
       for(let la=la0;la<=la1;la+=stepLa){
@@ -937,7 +944,7 @@ function drawMap(){
     const sx=wrapDx(wx-camX)*zoom+W/2,sy=(wy-camY)*zoom+H/2;
     if(sx<-30||sx>W+30||sy<-30||sy>H+30)continue;vis.push([i,sx,sy]);}
   const showSym=zoom>=30,showLbl=zoom>=23;   // Pisten-Symbole ab 30×, ICAO-Label ab 23×
-  const kmPx=40075/(W*zoom);
+  const kmPx=40075/(WBASE*zoom);
   for(const[i,sx,sy] of vis){
     const cat=catOf(i),r=AP[i];
     const col=cat===2?'#4aa3ff':cat===3?'#3ddc84':'#ff3b3b';
@@ -951,8 +958,8 @@ function drawMap(){
       for(const k of rws){
         const halfM=k[0]/2,hd=k[1]*Math.PI/180;
         const dLat=Math.cos(hd)*halfM/111320,dLon=Math.sin(hd)*halfM/(111320*Math.cos(la));
-        let x1=(base+dLon*W/360)*zoom+W/2,y1=(wy-dLat*H/180-camY)*zoom+H/2;
-        let x2=(base-dLon*W/360)*zoom+W/2,y2=(wy+dLat*H/180-camY)*zoom+H/2;
+        let x1=(base+dLon*WBASE/360)*zoom+W/2,y1=(wy-dLat*HBASE/180-camY)*zoom+H/2;
+        let x2=(base-dLon*WBASE/360)*zoom+W/2,y2=(wy+dLat*HBASE/180-camY)*zoom+H/2;
         const dl=Math.hypot(x2-x1,y2-y1)||1e-9;
         if(dl<18){const f=18/dl,xc=(x1+x2)/2,yc=(y1+y2)/2;x1=xc-(xc-x1)*f;y1=yc-(yc-y1)*f;x2=xc+(x2-xc)*f;y2=yc+(y2-yc)*f;}
         ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);had=true;}
@@ -975,8 +982,8 @@ function drawMap(){
       if(sx<-10||sx>W+10||sy<-10||sy>H+10)continue;
       ctx.beginPath();ctx.arc(sx,sy,6.5,0,7);ctx.stroke();}}
 // Maßstab (nm) unten links
-  const latC=(90-camY*180/H)*Math.PI/180;
-  const nmPerPx=111.32*Math.cos(latC)*(360/W)/zoom/1.852;
+  const latC=(90-camY*180/HBASE)*Math.PI/180;
+  const nmPerPx=111.32*Math.cos(latC)*(360/WBASE)/zoom/1.852;
   const nice=[1000,500,250,100,50,25,10,5].find(v=>v/nmPerPx<=180)||5;
   const bar=nice/nmPerPx;
   ctx.strokeStyle='#c9d4de';ctx.lineWidth=1;ctx.beginPath();
@@ -1025,12 +1032,29 @@ cv.addEventListener('click',e=>{if(dragMoved){dragMoved=false;return;}
   if(best!=null)selectAirport(best);});
 $('mzIn').onclick=()=>{zoom=Math.min(400,zoom*1.5);clampCam();drawMap();};
 $('mzOut').onclick=()=>{zoom=Math.max(1,zoom/1.5);clampCam();drawMap();};
-$('mzReset').onclick=()=>{zoom=1;camX=W/2;camY=H/2;drawMap();};
+$('mzReset').onclick=()=>{zoom=1;camX=WBASE/2;camY=HBASE/2;drawMap();};
 // ---- Mobil-Klappen: Filter/Routen-Steuerung einmal setzen, dann wegklappen — Karte ist die Primärsteuerung ----
 const mQ=(typeof window.matchMedia==='function')?window.matchMedia('(max-width:900px)'):null;
 function mApply(){if(!mQ||!mQ.matches)return;
   $('frows').style.display='none';$('rctl').style.display='none';}
 if(mQ){mApply();if(mQ.addEventListener)mQ.addEventListener('change',()=>{if(mQ.matches)mApply();});}
+// ---- Mobil: Karte höher als breit (wie erster Entwurf) — die Welt bleibt 1280×640, nur der Canvas-Viewport wird höher, nichts verzerrt ----
+function sizeMap(){
+  if(!mQ||!mQ.matches){W=1280;H=640;MAPSC=1;cv.width=1280;cv.height=640;return;}   // Desktop/Test: Weltformat 2:1 wie bisher
+  const rc=(typeof cv.getBoundingClientRect==='function')?cv.getBoundingClientRect():null;
+  const cssW=rc&&rc.width?Math.round(rc.width):0;
+  if(!cssW)return;   // Headless-Test ohne Layout: aktueller Zustand bleibt
+  const dpr=Math.min(2,Math.max(1,(typeof window.devicePixelRatio==='number'&&window.devicePixelRatio)||1));
+  let cssH=Math.round(((typeof window.innerHeight==='number'&&window.innerHeight)||cssW)*0.55);   // ~55 % der Viewport-Höhe
+  cssH=Math.max(Math.round(cssW*1.05),cssH);          // mindestens etwas höher als quadratisch
+  cssH=Math.min(cssH,Math.round(cssW*1.6),HBASE);     // Welt nie höher als ihr Format
+  W=cssW;H=cssH;MAPSC=dpr;
+  cv.width=cssW*dpr;cv.height=cssH*dpr;               // scharf auf Retina
+  cv.style.height=cssH+'px';
+  clampCam();}
+sizeMap();   // Init-am-Script-Ende (update→drawMap) zeichnet mit den neuen Maßen — kein drawMap hier (TDZ: precipImg & Co. sind erst später deklariert)
+if(typeof window.addEventListener==='function'){let szT=null;   // Drehen/Resize: nach 150 ms neu vermessen
+  window.addEventListener('resize',()=>{if(szT)clearTimeout(szT);szT=setTimeout(()=>{sizeMap();drawMap();},150);});}
 $('fToggle').onclick=()=>{const f=$('frows');f.style.display=f.style.display==='none'?'':'none';};
 $('rToggle').onclick=()=>{const r=$('rctl');r.style.display=r.style.display==='none'?'':'none';};
 // ---- Touch (iPhone/iPad): 1 Finger schiebt die Karte, 2 Finger Pinch-Zoom, Tippen wählt den Airport (Details erscheinen unter der Karte) ----
@@ -1076,7 +1100,6 @@ function selectAirport(i,opts){opts=opts||{};selected=i;
   if(tr)$('listWrap').scrollTop=Math.max(0,tr.offsetTop-28);
   if(!opts.noOriginFill){$('rOrig').value=AP[i][IDX.icao];if(routeMode==='from')scheduleRoute();}
  const r=AP[i],rw=RWx[r[IDX.icao]]||[];
- const commsPairs=rwCommsOf(r[IDX.icao]);   // Frequenz-Paare (zuvor als NaN-Piste gerendert)
  const rws=rwDetailOf(r[IDX.icao]);
  const land=acLanding();const bad=land>0&&r[IDX.rwy]<land*ft2m;
  const flagEmoji=cc=>/^[A-Z]{2}$/.test(cc)?String.fromCodePoint(...[...cc].map(ch=>127397+ch.charCodeAt(0))):'';
@@ -1088,7 +1111,6 @@ function selectAirport(i,opts){opts=opts||{};selected=i;
  let h=`<h3 style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">`
    +`<span><span style="color:#4aa3ff">${r[IDX.icao]}${r[IDX.iata]?'/'+r[IDX.iata]:''}</span> ${esc(r[IDX.name])} <span class="small">${r[IDX.ctry]} ${flagEmoji(r[IDX.ctry])}</span>`
    +` <span title="Längste Piste"><b>${Math.round(r[IDX.rwy]*mFT)} ft</b> <span style="color:${paved?'#c9d4de':'#ffd23b'}">${esc(surfName(r[IDX.surf]))}</span></span>`
-   +` <span title="Magnetische Variation" class="small">MagVar ${r[IDX.magvar]}°</span>`
    +`${r[IDX.sched]?' <span class="small">Linienverkehr</span>':''}`
    +`${bad?` <span style="color:#ff8080" title="Piste kürzer als Landing-Minimum des gewählten Flugzeugs">⚠ ${esc(AC[acSel][0])}: Landing-Minimum ${land} ft</span>`:''}`
    +`</span>`
@@ -1096,9 +1118,13 @@ function selectAirport(i,opts){opts=opts||{};selected=i;
    +`</h3>`;
  const flag=(on,txt)=>`<span style="color:${on?'#3ddc84':'#ff6b6b'}">${txt} ${on?'✓':'✗'}</span>`;
  h+=`<div style="margin-top:2px">${flag(r[IDX.ils],'ILS')} · ${flag(r[IDX.appr],'RNAV')} · ${flag(r[IDX.atis],'ATIS')} · ${flag(r[IDX.twr],'TWR')} · ${flag(r[IDX.papi],'PAPI')}${r[IDX.mtn]>=2?` · <span style="color:${r[IDX.mtn]===3?'#ff3b3b':'#ffd23b'}">▲ ${r[IDX.mtn]===3?'Hochgebirge':'Berg'}</span>`:''}</div>`;
- if(commsPairs.length)h+=`<div class="small">Funk: ${commsPairs.map(c=>`${COMMN[c[0]]||c[0]} ${c[1].toFixed(3)}`).join(' · ')}</div>`;
- if(rws.length){h+='<h4>Pisten</h4><table class="rwtab small"><tr><th>Piste</th><th>ft</th><th>Hdg</th><th>Surface</th><th>ILS</th><th>PAPI</th><th>ApprL</th><th>CL</th><th>Edge</th><th>REIL</th><th>Gesperrt</th></tr>';
-  rws.forEach((k,idx)=>{h+=`<tr><td>${idx+1}</td><td>${Math.round(k[0]*mFT)}</td><td>${k[1]}</td><td>${SURFN[k[2]]||'?'}</td><td>${k[3]?'✓':'·'}</td><td>${k[4]?'✓':'·'}</td><td>${k[5]?'✓':'·'}</td><td>${k[6]?'✓':'·'}</td><td>${k[7]?'✓':'·'}</td><td>${k[8]?'✓':'·'}</td><td>${k[9]||'·'}</td></tr>`;});h+='</table>';}
+ const isMob=!!(mQ&&mQ.matches);   // mobil: Pistentabelle kompakt — Kernspalten statt 11, nichts läuft aus dem Bildschirm
+ if(rws.length){h+='<h4>Pisten</h4><table class="rwtab small"><tr>'+(isMob
+   ?'<th>Piste</th><th>ft</th><th>Hdg</th><th>ILS</th><th>PAPI</th>'
+   :'<th>Piste</th><th>ft</th><th>Hdg</th><th>Surface</th><th>ILS</th><th>PAPI</th><th>ApprL</th><th>CL</th><th>Edge</th><th>REIL</th><th>Gesperrt</th>')+'</tr>';
+  rws.forEach((k,idx)=>{h+=(isMob
+   ?`<tr><td>${idx+1}</td><td>${Math.round(k[0]*mFT)}</td><td>${k[1]}</td><td>${k[3]?'✓':'·'}</td><td>${k[4]?'✓':'·'}</td></tr>`
+   :`<tr><td>${idx+1}</td><td>${Math.round(k[0]*mFT)}</td><td>${k[1]}</td><td>${SURFN[k[2]]||'?'}</td><td>${k[3]?'✓':'·'}</td><td>${k[4]?'✓':'·'}</td><td>${k[5]?'✓':'·'}</td><td>${k[6]?'✓':'·'}</td><td>${k[7]?'✓':'·'}</td><td>${k[8]?'✓':'·'}</td><td>${k[9]||'·'}</td></tr>`);});h+='</table>';}
  h+=`<div style="margin-top:6px"><button class="acc small" onclick="setOrigin('${r[IDX.icao]}')">Route ab hier</button></div>`;
  $('detail').style.display='block';$('detail').innerHTML=h;
 }
@@ -1403,6 +1429,7 @@ $('flagGo').onclick=()=>{
   render();};
 
 fillAc();fillSb();rtApply($('routeMode').value);rfLoad();update();
+
 </script>
 </body>
 </html>

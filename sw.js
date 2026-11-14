@@ -1,4 +1,4 @@
-const VER='asc-2026-11-14c';
+const VER='asc-2026-11-15';
 const ASSETS=['./','index.html','d0.js','ap0.js','ap1.js','ap2.js','ap3.js','ap4.js','rw0.js','rw1.js','rw2.js','rw3.js','rw4.js','dem0.js','dem1.js','dem2.js','dem3.js','dem4.js','dem5.js','dem6.js','dem7.js','deme0.js','deme1.js','deme2.js','deme3.js','g0.js','g1.js'];
 self.addEventListener('install',function(e){e.waitUntil(caches.open(VER).then(function(c){return c.addAll(ASSETS);}).then(function(){return self.skipWaiting();}));});
 self.addEventListener('activate',function(e){e.waitUntil(caches.keys().then(function(ks){return Promise.all(ks.filter(function(k){return k!==VER;}).map(function(k){return caches.delete(k);}));}).then(function(){return self.clients.claim();}));});
