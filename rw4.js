@@ -1,0 +1,1 @@
+const RW=Object.assign({},RW_0,RW_1,RW_2,RW_3);
